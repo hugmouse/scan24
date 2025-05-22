@@ -1,7 +1,7 @@
 <picture>
-  <source srcset="https://github.com/user-attachments/assets/a91f6bab-2ad5-4235-916b-2f8b27e30f24" media="(prefers-color-scheme: light)"/>
-  <source srcset="https://github.com/user-attachments/assets/f5a532ad-73d3-4935-a27b-b4f20da24778"  media="(prefers-color-scheme: dark)"/>
-  <img src="https://github.com/user-attachments/assets/a91f6bab-2ad5-4235-916b-2f8b27e30f24" alt="scan24"/>
+  <source srcset="https://i.imgur.com/PiBAxUK.png" media="(prefers-color-scheme: light)"/>
+  <source srcset="https://i.imgur.com/Tlwi5IF.png"  media="(prefers-color-scheme: dark)"/>
+  <img src="https://i.imgur.com/PiBAxUK.png" alt="scan24"/>
 </picture>
 
 # Scan24
@@ -10,9 +10,9 @@ Service that scans some basic information about the web page.
 ## Screenshots
 
 <picture>
-  <source srcset="https://github.com/user-attachments/assets/6aa14e07-6efe-4a79-bda5-a4a8cfc1a36b" media="(prefers-color-scheme: light)"/>
-  <source srcset="https://github.com/user-attachments/assets/6ef1dc8d-04e8-4e32-9ead-b85e4faa0f20"  media="(prefers-color-scheme: dark)"/>
-  <img src="https://github.com/user-attachments/assets/6aa14e07-6efe-4a79-bda5-a4a8cfc1a36b" alt="scan24 shows a scan of mysh.dev site"/>
+  <source srcset="https://i.imgur.com/zcwg6eH.png" media="(prefers-color-scheme: light)"/>
+  <source srcset="https://i.imgur.com/WN1LCj2.png"  media="(prefers-color-scheme: dark)"/>
+  <img src="https://i.imgur.com/zcwg6eH.png" alt="scan24 shows a scan of mysh.dev site"/>
 </picture>
 
 ## Deploying
