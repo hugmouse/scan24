@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1 11 11" width="14px" height="17px">
+    <a transform="matrix(1.06352103, 0, 0, 1.00908101, -1.93909506, -1.71006251)" id="object-0"
+       style="transform-origin: 2.9375px 2.703125px;">
+        <ellipse
+                style="stroke: rgb(255,255,255); paint-order: fill; fill: rgba(216, 216, 216, 0); stroke-width: 2px;"
+                cx="7.017" cy="6.788" rx="4.078" ry="4.078"/>
+        <path style="fill: rgb(216, 216, 216); stroke: rgb(255,255,255); stroke-linecap: round; stroke-width: 2px;"
+              d="M 10.054 10.759 L 12.282 13.602"/>
+    </a>
+</svg>

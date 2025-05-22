@@ -1,0 +1,218 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+h1, h2, h3, h4, h5, h6,
+button, input, label {
+    line-height: 1.1;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+}
+
+img,
+picture {
+    max-width: 100%;
+    display: block;
+}
+
+input, button,
+textarea, select {
+    font-family: inherit;
+    font-size: inherit;
+}
+
+:root {
+    color-scheme: light dark;
+}
+
+body {
+    font-family: "Avenir", "Futura", system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.4705882353;
+    font-weight: normal;
+    margin: 0;
+}
+
+main {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100dvh;
+    gap: 1rem;
+    padding-bottom: 1rem;
+}
+
+.container {
+    width: 100%;
+    max-width: 800px;
+}
+
+.search-container {
+    display: flex;
+    border: 1px solid rgb(113, 118, 120);
+    border-radius: 80px;
+    overflow: hidden;
+    background-color: rgba(0, 0, 0, 0.05);
+    width: 400px;
+    max-width: 90%;
+}
+
+.search-input {
+    flex-grow: 1;
+    padding: 10px 15px;
+    border: none;
+    outline: none;
+    background-color: transparent;
+    font-size: inherit;
+    color: #5c5e61;
+}
+
+.search-input::placeholder {
+    color: #5c5e61;
+}
+
+.search-button {
+    background-color: #f45334;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    margin: 5px;
+    box-shadow: 0 2px 3px 0 rgba(0, 0, 0, 0.15);
+}
+
+/* Logo */
+
+svg {
+    overflow: visible;
+    width: 400px;
+    max-width: 90%;
+}
+
+svg path, svg path:nth-child(2) {
+    fill: #354043;
+}
+
+@media (prefers-color-scheme: dark) {
+    svg path, svg path:nth-child(2) {
+        fill: white!important;
+    }
+
+    .search-container {
+        background-color: white;
+    }
+}
+
+/* For result.gohtml */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    line-height: 1.25;
+}
+
+th, td {
+    padding: 4px 8px;
+    text-align: left;
+    border-bottom: 1px solid rgba(221, 221, 221, 0.30);
+}
+
+@media screen and (max-width: 600px) {
+    th, td {
+        max-width: 100px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+th:first-of-type, td:first-of-type {
+    padding: 4px 0;
+}
+
+tr:hover {
+    background-color: rgba(240, 240, 240, 0.15);
+}
+
+a {
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.flex {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+}
+
+.flex-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.flex .col:last-of-type {
+    flex-grow: 1;
+}
+
+div.url {
+    border: 1px solid rgb(113, 118, 120);
+    border-radius: 8px;
+    padding: 8px 16px;
+    background-color: rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 3px 0 rgba(0, 0, 0, 0.15);
+}
+
+@media screen and (max-width: 600px) {
+    .container {
+        padding: 0 1rem;
+    }
+
+    .flex {
+        gap: 0;
+    }
+}
+
+/*
+
+td span {
+    position: relative;
+    cursor: help;
+}
+
+td span::after {
+    content: attr(data-info);
+    position: absolute;
+    top: 100%;
+    left: 0;
+    padding: 0.25em 0.5em;
+    background: #333;
+    color: #fff;
+    border-radius: 0.25em;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+    width: 200px;
+    text-wrap: auto;
+    z-index: 2;
+}
+
+td span:hover::after {
+    opacity: 1;
+}
+
+*/

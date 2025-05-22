@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan24: Analysis Result: {{.Title}}</title>
+    <link href="/static/main.css" rel="stylesheet"/>
+    <link rel="shortcut icon" type="image/svg+xml" sizes="any" href="/static/icon.svg">
+    <style>
+        .flex-values {
+            display: flex;
+            gap: 0.5rem;
+            flex-direction: row;
+        }
+    </style>
+</head>
+<body>
+<main>
+    <div class="container">
+        {{ if .Error }}
+            <p>{{ .Error }}</p>
+            <p><a href="/">Try another URL</a></p>
+        {{ else }}
+            <p><a href="/">&leftarrow; Analyze another URL</a></p>
+
+            <!-- Scan24 logo -->
+            {{ include "scan24-logo.svg" }}
+            <h1 style="margin-bottom: 0">Title: "{{.Title}}"</h1>
+            <p>{{ .URL }}</p>
+            <div class="flex">
+                <div class="flex-values">
+                    <div>
+                        <strong>HTML Version:</strong><br>
+                        <strong>Login form found:</strong><br>
+                        <strong>Headings:</strong><br>
+                        {{range $tag, $count := .Headings}}
+                            {{ if gt $count 0 }} {{$tag}}:<br> {{ end }}
+                        {{end}}
+                    </div>
+                    <div>
+                        {{.HTMLVersion}}<br>
+                        {{if .HasLoginForm}}Yes{{else}}No{{end}}<br>
+                        <br>
+                        {{range $tag, $count := .Headings}}
+                            {{ if gt $count 0 }} {{$count}}:<br> {{ end }}
+                        {{end}}
+                    </div>
+                </div>
+
+                <table class="link-report">
+                    <thead>
+                    <tr>
+                        <th style="width: 8.75rem">Link type</th>
+                        <th style="width: 5.75rem">Total</th>
+                        <th>Accessible</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td>Internal links</td>
+                        <td>{{.LinkCounters.Internal}}</td>
+                        <td>{{.LinkCounters.InternalAlive}}</td>
+                    </tr>
+                    <tr>
+                        <td>External links</td>
+                        <td>{{.LinkCounters.External}}</td>
+                        <td>{{.LinkCounters.ExternalAlive}}</td>
+                    </tr>
+                    <tr>
+                        <td>Protocol links</td>
+                        <td>{{.LinkCounters.Protocol}}</td>
+                        <td>N/A</td>
+                    </tr>
+                    </tbody>
+                </table>
+
+
+                <div class="table">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th style="width: 8.75rem">Status Code</th>
+                            <th style="width: 5.75rem">Type</th>
+                            <th>Link</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {{range .HyperLinks}}
+                            <tr>
+                                <td data-info="{{ .Err }}">{{ if le .StatusCode 0 }}
+                                        N/A {{ else }} {{ .StatusCode }} {{ end }}
+                                </td>
+                                <td>{{.HrefType}}</td>
+                                <td>{{.Raw}}</td>
+                            </tr>
+                        {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {{ end }}
+    </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan24: Web Page Analyzer</title>
+    <link href="/static/main.css" rel="stylesheet"/>
+    <link rel="shortcut icon" type="image/svg+xml" sizes="any" href="/static/icon.svg">
+</head>
+<body>
+<main>
+    <!-- Scan24 logo -->
+    {{ include "scan24-logo.svg" }}
+    <form class="search-container" action="/analyze" method="get">
+        <input type="url" name="url" id="url" class="search-input" placeholder="Enter URL to analyze...">
+        <button type="submit" class="search-button">
+            <!-- This icon is self-made! Feel free to steal -->
+            {{ include "search.svg" }}
+        </button>
+    </form>
+    <p style="margin-top: 0">Scan24 is <a href="https://github.com/hugmouse/scan24" target="_blank" rel="noopener">Open-Source</a>,
+        check it out!</p>
+</main>
+</body>
+</html>
