@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type LinkCounters struct {
@@ -162,6 +163,9 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 		linkMu sync.Mutex
 	)
 
+	// TODO: replace local ticker with global/some other mechanism of rate-limiting
+	var rate = time.Tick(time.Second / time.Duration(10))
+
 	// Essentially just run a goroutine for every <a> with a valid href value
 	//
 	// This also runs for href that = "#!" or "./" and etc since there might
@@ -174,6 +178,7 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 
 		wg.Add(1)
 		go func(attr string) {
+			<-rate
 			defer wg.Done()
 
 			link := parser.Analyze(attr, baseURL)
