@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/hugmouse/scan24/internal/parser"
-	"github.com/hugmouse/scan24/static"
-	"github.com/hugmouse/scan24/templates"
 	"golang.org/x/net/html/charset"
 	"html/template"
 	"io"
@@ -41,32 +39,6 @@ var (
 	tmplIndex  *template.Template
 	tmplResult *template.Template
 )
-
-func init() {
-	funcs := template.FuncMap{
-		"include": func(path string) template.HTML {
-			bb, err := static.FS.ReadFile(path)
-			if err != nil {
-				panic(err)
-			}
-			return template.HTML(bb)
-		},
-	}
-
-	baseTmpl := template.New("").Funcs(funcs)
-
-	var err error
-
-	tmplIndex, err = baseTmpl.New("index.gohtml").ParseFS(templates.FS, "index.gohtml")
-	if err != nil {
-		log.Fatalf("Failed to parse index.gohtml: %v", err)
-	}
-
-	tmplResult, err = baseTmpl.New("result.gohtml").ParseFS(templates.FS, "result.gohtml")
-	if err != nil {
-		log.Fatalf("Failed to parse result.gohtml: %v", err)
-	}
-}
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

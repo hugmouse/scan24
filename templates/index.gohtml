@@ -6,12 +6,21 @@
     <title>Scan24: Web Page Analyzer</title>
     <link href="/static/main.css" rel="stylesheet"/>
     <link rel="shortcut icon" type="image/svg+xml" sizes="any" href="/static/icon.svg">
+    <meta name="htmx-config" content='{"responseHandling": [{"code":".*", "swap": true}]}' />
 </head>
 <body>
 <main>
     <!-- Scan24 logo -->
     {{ include "scan24-logo.svg" }}
-    <form class="search-container" action="/analyze" method="get">
+    <form
+            class="search-container"
+            action="/analyze"
+            hx-get="/analyze"
+            hx-target="body"
+            hx-include="#url"
+            hx-push-url="true"
+            hx-disabled-elt="find input[type='text'], find button"
+            method="get">
         <input type="url" name="url" id="url" class="search-input" placeholder="Enter URL to analyze...">
         <button type="submit" class="search-button">
             <!-- This icon is self-made! Feel free to steal -->
@@ -21,5 +30,9 @@
     <p style="margin-top: 0">Scan24 is <a href="https://github.com/hugmouse/scan24" target="_blank" rel="noopener">Open-Source</a>,
         check it out!</p>
 </main>
+<script>
+    // HTMX part
+    {{ includeJS "htmx-2.0.4.js" }}
+</script>
 </body>
 </html>

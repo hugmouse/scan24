@@ -6,22 +6,22 @@
     <title>Scan24: Analysis Result: {{.Title}}</title>
     <link href="/static/main.css" rel="stylesheet"/>
     <link rel="shortcut icon" type="image/svg+xml" sizes="any" href="/static/icon.svg">
-    <style>
-        .flex-values {
-            display: flex;
-            gap: 0.5rem;
-            flex-direction: row;
-        }
-    </style>
+    <meta name="htmx-config" content='{"responseHandling": [{"code":".*", "swap": true}]}' />
 </head>
 <body>
 <main>
     <div class="container">
         {{ if .Error }}
             <p>{{ .Error }}</p>
-            <p><a href="/">Try another URL</a></p>
+            <p><a href="/"
+                  hx-get="/"
+                  hx-target="body"
+                  hx-push-url="true">Try another URL</a></p>
         {{ else }}
-            <p><a href="/">&leftarrow; Analyze another URL</a></p>
+            <p><a href="/"
+                  hx-get="/"
+                  hx-target="body"
+                  hx-push-url="true">&leftarrow; Analyze another URL</a></p>
 
             <!-- Scan24 logo -->
             {{ include "scan24-logo.svg" }}
