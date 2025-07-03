@@ -34,11 +34,19 @@ type PageData struct {
 	SiteInformation string
 	Error           string
 }
+type globalMapData struct {
+	Page     PageData
+	URL      string
+	Progress float64
+	Error    string
+}
 
 var (
 	tmplIndex    *template.Template
 	tmplResult   *template.Template
 	tmplProgress *template.Template
+	globalMap    = make(map[string]globalMapData)
+	globalLock   = sync.Mutex{}
 )
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
@@ -157,11 +165,13 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Start job, return status
 	go doJob(doc, bodyBytes, baseURL, targetURL)
+	globalLock.Lock()
 	globalMap[targetURL] = globalMapData{
 		Page:     PageData{},
 		URL:      targetURL,
 		Progress: 0.0,
 	}
+	globalLock.Unlock()
 	err = tmplProgress.Execute(w, globalMapData{
 		Page:     PageData{},
 		URL:      targetURL,
@@ -242,11 +252,13 @@ func doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.URL, targetURL 
 			links = append(links, link)
 			linkMu.Unlock()
 			atomic.AddInt64(&jobDone, 1)
+			globalLock.Lock()
 			globalMap[targetURL] = globalMapData{
 				Page:     PageData{},
 				URL:      targetURL,
 				Progress: float64(jobDone) / float64(jobCounter) * 100,
 			}
+			globalLock.Unlock()
 		}(attr)
 	})
 
@@ -254,6 +266,7 @@ func doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.URL, targetURL 
 
 	haveLoginForm := parser.HasLoginForm(doc)
 
+	globalLock.Lock()
 	globalMap[targetURL] = globalMapData{
 		Page: PageData{
 			URL:          targetURL,
@@ -273,15 +286,7 @@ func doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.URL, targetURL 
 		URL:      targetURL,
 		Progress: 100.0,
 	}
-}
-
-var globalMap = make(map[string]globalMapData)
-
-type globalMapData struct {
-	Page     PageData
-	URL      string
-	Progress float64
-	Error    string
+	globalLock.Unlock()
 }
 
 func JobStatus(w http.ResponseWriter, r *http.Request) {
