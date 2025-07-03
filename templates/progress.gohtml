@@ -1,21 +1,47 @@
-{{ if .Error }}
-    <p>{{ .Error }}</p>
-    <p><a href="/"
-          hx-get="/"
-          hx-target="body"
-          hx-push-url="true">Try another URL</a></p>
+{{ if lt .Progress 100.0 }}
+    <div hx-get="/status?url={{ .URL }}" hx-trigger="every 1s" hx-target="this" hx-swap="outerHTML">
+        <form
+                class="search-container"
+                action="/analyze"
+                hx-get="/analyze"
+                hx-target="#scan"
+                hx-include="#url"
+                hx-push-url="true"
+                hx-disabled-elt="find input[type='text'], find button"
+                method="get">
+            <input type="url" name="url" id="url" class="search-input" value="{{ .URL }}"
+                   placeholder="Enter URL to analyze..." disabled>
+            <button type="submit" class="search-button" disabled>
+                <!-- This icon is self-made! Feel free to steal -->
+                {{ include "search.svg" }}
+            </button>
+        </form>
+        <div>
+            <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+                 aria-valuenow="{{ .Progress }}">
+                <div id="pb" class="progress-bar" style="width:{{ .Progress }}%"></div>
+            </div>
+        </div>
+    </div>
 {{ else }}
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Scan24: Analysis Result: {{.Title}}</title>
-        <link href="/static/main.css" rel="stylesheet"/>
-        <link rel="shortcut icon" type="image/svg+xml" sizes="any" href="/static/icon.svg">
-    </head>
-    <body>
-    <main>
+    <div id="result">
+        <form
+                class="search-container"
+                action="/analyze"
+                hx-get="/analyze"
+                hx-target="#result"
+                hx-swap="outerHTML"
+                hx-include="#url"
+                hx-push-url="true"
+                hx-disabled-elt="find input[type='text'], find button"
+                method="get">
+            <input type="url" name="url" id="url" class="search-input" value="{{ .URL }}"
+                   placeholder="Enter URL to analyze...">
+            <button type="submit" class="search-button">
+                <!-- This icon is self-made! Feel free to steal -->
+                {{ include "search.svg" }}
+            </button>
+        </form>
         <div class="container">
             <h1 style="margin-bottom: 8px">Title: "{{.Page.Title}}"</h1>
             <div class="flex">
@@ -90,7 +116,5 @@
                 </div>
             </div>
         </div>
-    </main>
-    </body>
-    </html>
+    </div>
 {{ end }}

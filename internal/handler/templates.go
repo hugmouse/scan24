@@ -38,4 +38,9 @@ func init() {
 	if err != nil {
 		log.Fatalf("Failed to parse result.gohtml: %v", err)
 	}
+
+	tmplProgress, err = baseTmpl.New("progress.gohtml").ParseFS(templates.FS, "progress.gohtml")
+	if err != nil {
+		log.Fatalf("Lol")
+	}
 }

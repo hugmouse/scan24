@@ -15,17 +15,18 @@
     <form
             class="search-container"
             action="/analyze"
+            hx-swap="outerHTML"
             hx-get="/analyze"
-            hx-target="body"
+            hx-target="this"
             hx-include="#url"
             hx-push-url="true"
             hx-disabled-elt="find input[type='text'], find button"
             method="get">
-        <input type="url" name="url" id="url" class="search-input" placeholder="Enter URL to analyze...">
-        <button type="submit" class="search-button">
-            <!-- This icon is self-made! Feel free to steal -->
-            {{ include "search.svg" }}
-        </button>
+            <input type="url" name="url" id="url" class="search-input" placeholder="Enter URL to analyze...">
+            <button type="submit" class="search-button">
+                <!-- This icon is self-made! Feel free to steal -->
+                {{ include "search.svg" }}
+            </button>
     </form>
     <p style="margin-top: 0">Scan24 is <a href="https://github.com/hugmouse/scan24" target="_blank" rel="noopener">Open-Source</a>,
         check it out!</p>

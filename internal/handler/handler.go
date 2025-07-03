@@ -36,8 +36,9 @@ type PageData struct {
 }
 
 var (
-	tmplIndex  *template.Template
-	tmplResult *template.Template
+	tmplIndex    *template.Template
+	tmplResult   *template.Template
+	tmplProgress *template.Template
 )
 
 func IndexHandler(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +76,16 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	val, ok := globalMap[targetURL]
+	if ok {
+		err := tmplProgress.Execute(w, val)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error executing result template: %v", err), http.StatusInternalServerError)
+			log.Printf("Error executing result template: %v", err)
+		}
+		return
+	}
+
 	resp, err := http.Get(targetURL)
 	if err != nil {
 		respondWithError(w, http.StatusBadGateway, tmplResult, fmt.Sprintf("Failed to fetch URL: %v", err))
@@ -108,6 +119,25 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Start job, return status
+	go doJob(doc, bodyBytes, baseURL, targetURL)
+	globalMap[targetURL] = globalMapData{
+		Page:     PageData{},
+		URL:      targetURL,
+		Progress: 0.0,
+	}
+	err = tmplProgress.Execute(w, globalMapData{
+		Page:     PageData{},
+		URL:      targetURL,
+		Progress: 0.0,
+	})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error executing result template: %v", err), http.StatusInternalServerError)
+		log.Printf("Error executing result template: %v", err)
+	}
+}
+
+func doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.URL, targetURL string) {
 	htmlVersion, err := parser.GetHTMLVersion(string(bodyBytes))
 	if err != nil {
 		log.Printf("Could not determine HTML version: %v", err)
@@ -123,6 +153,8 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 	links := make([]parser.HyperLink, 0)
 
 	var (
+		jobCounter      int64
+		jobDone         int64
 		externalCounter int64
 		externalAlive   int64
 		internalCounter int64
@@ -134,9 +166,8 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 		wg     sync.WaitGroup
 		linkMu sync.Mutex
 	)
-
 	// TODO: replace local ticker with global/some other mechanism of rate-limiting
-	var rate = time.Tick(time.Second / time.Duration(10))
+	var rate = time.Tick(time.Second / time.Duration(1))
 
 	// Essentially just run a goroutine for every <a> with a valid href value
 	//
@@ -149,6 +180,7 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		wg.Add(1)
+		atomic.AddInt64(&jobCounter, 1)
 		go func(attr string) {
 			<-rate
 			defer wg.Done()
@@ -173,6 +205,12 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 			linkMu.Lock()
 			links = append(links, link)
 			linkMu.Unlock()
+			atomic.AddInt64(&jobDone, 1)
+			globalMap[targetURL] = globalMapData{
+				Page:     PageData{},
+				URL:      targetURL,
+				Progress: float64(jobDone) / float64(jobCounter) * 100,
+			}
 		}(attr)
 	})
 
@@ -180,23 +218,47 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 
 	haveLoginForm := parser.HasLoginForm(doc)
 
-	data := PageData{
-		URL:          targetURL,
-		Title:        title,
-		HTMLVersion:  htmlVersion.Name,
-		Headings:     headings,
-		HyperLinks:   links,
-		HasLoginForm: haveLoginForm,
-		LinkCounters: LinkCounters{
-			Internal:      internalCounter,
-			InternalAlive: internalAlive,
-			External:      externalCounter,
-			ExternalAlive: externalAlive,
-			Protocol:      protocolCounter,
+	globalMap[targetURL] = globalMapData{
+		Page: PageData{
+			URL:          targetURL,
+			Title:        title,
+			HTMLVersion:  htmlVersion.Name,
+			Headings:     headings,
+			HyperLinks:   links,
+			HasLoginForm: haveLoginForm,
+			LinkCounters: LinkCounters{
+				Internal:      internalCounter,
+				InternalAlive: internalAlive,
+				External:      externalCounter,
+				ExternalAlive: externalAlive,
+				Protocol:      protocolCounter,
+			},
 		},
+		URL:      targetURL,
+		Progress: 100.0,
 	}
+}
 
-	err = tmplResult.Execute(w, data)
+var globalMap = make(map[string]globalMapData)
+
+type globalMapData struct {
+	Page     PageData
+	URL      string
+	Progress float64
+	Error    string
+}
+
+func JobStatus(w http.ResponseWriter, r *http.Request) {
+	targetURL := r.URL.Query().Get("url")
+	if targetURL == "" {
+		respondWithError(w, http.StatusBadRequest, tmplResult, "URL parameter is missing.")
+		return
+	}
+	val, ok := globalMap[targetURL]
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, tmplResult, "Job does not exist")
+	}
+	err := tmplProgress.Execute(w, val)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error executing result template: %v", err), http.StatusInternalServerError)
 		log.Printf("Error executing result template: %v", err)

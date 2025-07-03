@@ -11,6 +11,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handler.IndexHandler)
 	mux.HandleFunc("/analyze", handler.AnalyzeHandler)
+	mux.HandleFunc("/status", handler.JobStatus)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(static.FS))))
 
 	log.Println("Starting server on :8080")
