@@ -53,6 +53,42 @@ func IndexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func ResultHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		respondWithError(w, http.StatusMethodNotAllowed, tmplResult, "Method not allowed. Use GET.")
+		return
+	}
+
+	targetURL := r.URL.Query().Get("url")
+	if targetURL == "" {
+		respondWithError(w, http.StatusBadRequest, tmplResult, "URL parameter is missing.")
+		return
+	}
+
+	baseURL, err := url.ParseRequestURI(targetURL)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, tmplResult, fmt.Sprintf("Invalid URL provided: %v", err))
+		return
+	}
+
+	if baseURL.Scheme != "http" && baseURL.Scheme != "https" {
+		respondWithError(w, http.StatusBadRequest, tmplResult, "Only HTTP/HTTPS links are allowed. For example: https://mysh.dev")
+		return
+	}
+
+	val, ok := globalMap[targetURL]
+	if !ok {
+		respondWithError(w, http.StatusBadRequest, tmplResult, "We don't have scan results for the following URL: "+baseURL.String())
+		return
+	}
+	err = tmplResult.Execute(w, val)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error executing result template: %v", err), http.StatusInternalServerError)
+		log.Printf("Error executing result template: %v", err)
+	}
+	return
+}
+
 func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		respondWithError(w, http.StatusMethodNotAllowed, tmplResult, "Method not allowed. Use GET.")

@@ -117,4 +117,9 @@
             </div>
         </div>
     </div>
+    <script>
+        const url = new URL(location);
+        url.pathname = "/result";
+        history.pushState({}, "", url);
+    </script>
 {{ end }}

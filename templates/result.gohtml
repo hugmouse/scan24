@@ -10,87 +10,113 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Scan24: Analysis Result: {{.Title}}</title>
+        <title>Scan24: Analysis Result: {{ .Page.Title }}</title>
         <link href="/static/main.css" rel="stylesheet"/>
         <link rel="shortcut icon" type="image/svg+xml" sizes="any" href="/static/icon.svg">
+        <meta name="htmx-config" content='{"responseHandling": [{"code":".*", "swap": true}]}' />
     </head>
     <body>
     <main>
-        <div class="container">
-            <h1 style="margin-bottom: 8px">Title: "{{.Page.Title}}"</h1>
-            <div class="flex">
-                <div class="flex-values">
-                    <div>
-                        <strong>HTML Version:</strong><br>
-                        <strong>Login form found:</strong><br>
-                        <strong>Headings:</strong><br>
-                        {{range $tag, $count := .Page.Headings}}
-                            {{ if gt $count 0 }} {{$tag}}:<br> {{ end }}
-                        {{end}}
+        {{ include "scan24-logo.svg" }}
+        <div id="result">
+            <form
+                    class="search-container"
+                    action="/analyze"
+                    hx-swap="outerHTML"
+                    hx-get="/analyze"
+                    hx-target="#result"
+                    hx-include="#url"
+                    hx-push-url="true"
+                    hx-disabled-elt="find input[type='text'], find button"
+                    method="get">
+                <input type="url" name="url" id="url" class="search-input" placeholder="Enter URL to analyze...">
+                <button type="submit" class="search-button">
+                    <!-- This icon is self-made! Feel free to steal -->
+                    {{ include "search.svg" }}
+                </button>
+            </form>
+            <div class="container">
+                <h1 style="margin-bottom: 8px">Title: "{{.Page.Title}}"</h1>
+                <div class="flex">
+                    <div class="flex-values">
+                        <div>
+                            <strong>HTML Version:</strong><br>
+                            <strong>Login form found:</strong><br>
+                            <strong>Headings:</strong><br>
+                            {{range $tag, $count := .Page.Headings}}
+                                {{ if gt $count 0 }} {{$tag}}:<br> {{ end }}
+                            {{end}}
+                        </div>
+                        <div>
+                            {{.Page.HTMLVersion}}<br>
+                            {{if .Page.HasLoginForm}}Yes{{else}}No{{end}}<br>
+                            <br>
+                            {{range $tag, $count := .Page.Headings}}
+                                {{ if gt $count 0 }} {{$count}}<br> {{ end }}
+                            {{end}}
+                        </div>
                     </div>
-                    <div>
-                        {{.Page.HTMLVersion}}<br>
-                        {{if .Page.HasLoginForm}}Yes{{else}}No{{end}}<br>
-                        <br>
-                        {{range $tag, $count := .Page.Headings}}
-                            {{ if gt $count 0 }} {{$count}}<br> {{ end }}
-                        {{end}}
-                    </div>
-                </div>
 
-                <table class="link-report">
-                    <thead>
-                    <tr>
-                        <th style="width: 8.75rem">Link type</th>
-                        <th style="width: 5.75rem">Total</th>
-                        <th>Accessible</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr>
-                        <td>Internal links</td>
-                        <td>{{.Page.LinkCounters.Internal}}</td>
-                        <td>{{.Page.LinkCounters.InternalAlive}}</td>
-                    </tr>
-                    <tr>
-                        <td>External links</td>
-                        <td>{{.Page.LinkCounters.External}}</td>
-                        <td>{{.Page.LinkCounters.ExternalAlive}}</td>
-                    </tr>
-                    <tr>
-                        <td>Protocol links</td>
-                        <td>{{.Page.LinkCounters.Protocol}}</td>
-                        <td>N/A</td>
-                    </tr>
-                    </tbody>
-                </table>
-
-
-                <div class="table">
-                    <table>
+                    <table class="link-report">
                         <thead>
                         <tr>
-                            <th style="width: 8.75rem">Status Code</th>
-                            <th style="width: 5.75rem">Type</th>
-                            <th>Link</th>
+                            <th style="width: 8.75rem">Link type</th>
+                            <th style="width: 5.75rem">Total</th>
+                            <th>Accessible</th>
                         </tr>
                         </thead>
                         <tbody>
-                        {{range .Page.HyperLinks}}
-                            <tr>
-                                <td data-info="{{ .Err }}">{{ if le .StatusCode 0 }}
-                                        N/A {{ else }} {{ .StatusCode }} {{ end }}
-                                </td>
-                                <td>{{.HrefType}}</td>
-                                <td>{{.Raw}}</td>
-                            </tr>
-                        {{end}}
+                        <tr>
+                            <td>Internal links</td>
+                            <td>{{.Page.LinkCounters.Internal}}</td>
+                            <td>{{.Page.LinkCounters.InternalAlive}}</td>
+                        </tr>
+                        <tr>
+                            <td>External links</td>
+                            <td>{{.Page.LinkCounters.External}}</td>
+                            <td>{{.Page.LinkCounters.ExternalAlive}}</td>
+                        </tr>
+                        <tr>
+                            <td>Protocol links</td>
+                            <td>{{.Page.LinkCounters.Protocol}}</td>
+                            <td>N/A</td>
+                        </tr>
                         </tbody>
                     </table>
+
+
+                    <div class="table">
+                        <table>
+                            <thead>
+                            <tr>
+                                <th style="width: 8.75rem">Status Code</th>
+                                <th style="width: 5.75rem">Type</th>
+                                <th>Link</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {{range .Page.HyperLinks}}
+                                <tr>
+                                    <td data-info="{{ .Err }}">{{ if le .StatusCode 0 }}
+                                            N/A {{ else }} {{ .StatusCode }} {{ end }}
+                                    </td>
+                                    <td>{{.HrefType}}</td>
+                                    <td>{{.Raw}}</td>
+                                </tr>
+                            {{end}}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
+        <p style="margin-top: 0">Scan24 is <a href="https://github.com/hugmouse/scan24" target="_blank" rel="noopener">Open-Source</a>,
+            check it out!</p>
     </main>
     </body>
+    <script>
+        // HTMX part
+        {{ includeJS "htmx-2.0.4.js" }}
+    </script>
     </html>
 {{ end }}
