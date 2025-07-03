@@ -7,7 +7,7 @@
     <link href="/static/main.css" rel="stylesheet"/>
     <link rel="shortcut icon" type="image/svg+xml" sizes="any" href="/static/icon.svg">
     <meta name="htmx-config" content='{"responseHandling": [{"code":".*", "swap": true}]}' />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline' 'self'; script-src 'self';">
 </head>
 <body>
 <main>
@@ -32,9 +32,6 @@
     <p style="margin-top: 0">Scan24 is <a href="https://github.com/hugmouse/scan24" target="_blank" rel="noopener">Open-Source</a>,
         check it out!</p>
 </main>
-<script>
-    // HTMX part
-    {{ includeJS "htmx-2.0.4.js" }}
-</script>
+<script src="/static/htmx-2.0.4.js"></script>
 </body>
 </html>
