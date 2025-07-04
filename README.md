@@ -83,8 +83,6 @@ Wikipedia articles:
 - Support for `.env` to make it a little bit more friendly
 - Come up with a user-agent and respect robots.txt if possible
 - Queue system: If multiple users request the same page concurrently, we should ignore duplicate requests and return the status of the currently running job
-- Rate limiting: Scan24 currently spawns a separate goroutine for each valid `<a>` tag on the page, which can result in 1000++ requests to the remote server
-  - In addition to potentially functioning as a DoS tool, this behavior could lead to the IP address being blacklisted
 - Better error handling for non-standard HTTP statuses, redirect loops, broken streams etc.
 - Modularization: Separate the DOCTYPE and Href parsers into packages and refactor them to be more generic
 - Custom HTTP client support: Add the ability to inject custom `http.Client` instances into the parsers
