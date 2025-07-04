@@ -29,7 +29,7 @@ var (
 //
 // Cases that aren't covered:
 // - multipage (requires JS or some insane parsing)
-// - protected login forms (security through obscurity)
+// - protected login forms (security through obscurity).
 func HasLoginForm(doc *goquery.Document) bool {
 	// At minimum, we expect either:
 	// - autocomplete hints
@@ -44,6 +44,7 @@ func hasAutoCompleteHints(doc *goquery.Document) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -57,19 +58,26 @@ func hasLoginInput(doc *goquery.Document) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
 func hasValidForm(doc *goquery.Document) bool {
 	found := false
+
 	doc.Find("form").EachWithBreak(func(_ int, s *goquery.Selection) bool {
 		method, hasMethod := s.Attr("method")
+
 		action, hasAction := s.Attr("action")
+
 		if hasMethod && hasAction && strings.TrimSpace(method) != "" && strings.TrimSpace(action) != "" {
 			found = true
+
 			return false
 		}
+
 		return true
 	})
+
 	return found
 }

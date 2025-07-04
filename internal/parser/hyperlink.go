@@ -11,6 +11,15 @@ import (
 
 type HrefType string
 
+var (
+	ErrUnsupportedDoctype  = errors.New("unsupported DOCTYPE or quirky document (no <!DOCTYPE>)")
+	ErrMalformedDoctype    = errors.New("malformed <!DOCTYPE> (no closing '>')")
+	ErrUnterminatedQuote   = errors.New("unterminated quote in <!DOCTYPE>")
+	ErrDoctypeNoNameToken  = errors.New("DOCTYPE has no name token, document considered quirky")
+	ErrUnrecognizedDoctype = errors.New("unsupported or unrecognized DOCTYPE format, document considered quirky")
+	ErrUnsupportedScheme   = errors.New("unsupported scheme")
+)
+
 const (
 	Protocol HrefType = "protocol"
 	External HrefType = "external"
@@ -21,15 +30,17 @@ func Classify(href string) HrefType {
 	if isProtocol(href) {
 		return Protocol
 	}
+
 	if isExternal(href) {
 		return External
 	}
+
 	return Internal
 }
 
 // isProtocol checks if href is a protocol.
 //
-// Protocol is a link that has a scheme and NO host
+// Protocol is a link that has a scheme and NO host.
 func isProtocol(href string) bool {
 	u, err := url.Parse(href)
 	if err != nil {
@@ -92,7 +103,7 @@ func Analyze(rawHref string, baseURL *url.URL) HyperLink {
 			Raw:        rawHref,
 			Resolved:   resolved,
 			HrefType:   string(hrefType),
-			Err:        errors.New("unsupported scheme"),
+			Err:        ErrUnsupportedScheme,
 			StatusCode: -1,
 		}
 	}
@@ -101,6 +112,7 @@ func Analyze(rawHref string, baseURL *url.URL) HyperLink {
 	status, fetchErr := fetchStatus(resolved.String())
 	if fetchErr != nil {
 		log.Printf("Analyze: failed fetching %q: %v", resolved.String(), fetchErr)
+
 		return HyperLink{
 			Raw:        rawHref,
 			Resolved:   resolved,
@@ -118,39 +130,45 @@ func Analyze(rawHref string, baseURL *url.URL) HyperLink {
 	}
 }
 
-// resolveURL parses rawHref and, if relative, resolves it against baseURL
+// resolveURL parses rawHref and, if relative, resolves it against baseURL.
 func resolveURL(rawHref string, baseURL *url.URL) (*url.URL, error) {
-	u, err := url.Parse(rawHref)
+	_url, err := url.Parse(rawHref)
 	if err != nil {
 		return nil, fmt.Errorf("parse error: %w", err)
 	}
-	if u.IsAbs() {
-		return u, nil
+
+	if _url.IsAbs() {
+		return _url, nil
 	}
+
 	if baseURL == nil {
 		return nil, fmt.Errorf("relative URL %q with nil base", rawHref)
 	}
-	return baseURL.ResolveReference(u), nil
+
+	return baseURL.ResolveReference(_url), nil
 }
 
 // fetchStatus does HEAD first; if it returns 405 Method Not Allowed,
-// it retries with GET
-func fetchStatus(u string) (int, error) {
+// it retries with GET.
+func fetchStatus(url string) (int, error) {
 	// HEAD
-	resp, err := DefaultHTTPClient.Head(u)
+	resp, err := DefaultHTTPClient.Head(url)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to HEAD the url '%s': %w", url, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusMethodNotAllowed {
 		// retry GET
-		resp2, err2 := DefaultHTTPClient.Get(u)
+		resp2, err2 := DefaultHTTPClient.Get(url)
 		if err2 != nil {
-			return 0, err2
+			return 0, fmt.Errorf("failed to GET the url '%s': %w", url, err)
 		}
+
 		defer resp2.Body.Close()
+
 		return resp2.StatusCode, nil
 	}
+
 	return resp.StatusCode, nil
 }

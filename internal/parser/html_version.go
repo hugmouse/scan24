@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"errors"
 	"strings"
 	"unicode"
 )
@@ -19,7 +18,7 @@ type DoctypeNode struct {
 }
 
 // KnownDOCTYPEs are the supported DOCTYPE formats,
-// excluding XHTML5 and HTML5 (handled in GetHTMLVersion explicitly)
+// excluding XHTML5 and HTML5 (handled in GetHTMLVersion explicitly).
 var KnownDOCTYPEs = map[string]string{
 	"-//W3C//DTD HTML 2.0//EN":                 "HTML 2.0",
 	"-//IETF//DTD HTML 2.0//EN":                "HTML 2.0",
@@ -76,14 +75,16 @@ func GetHTMLVersion(input string) (*DoctypeNode, error) {
 				Raw:              "",
 			}, nil
 		}
-		return nil, errors.New("unsupported DOCTYPE or quirky document (no <!DOCTYPE>)")
+
+		return nil, ErrUnsupportedDoctype
 	}
 
 	// Now we need to find `>` for the `<!DOCTYPE`
 	endIndex := strings.IndexRune(up[startIndex:], '>')
 	if endIndex < 0 {
-		return nil, errors.New("malformed <!DOCTYPE> (no closing '>')")
+		return nil, ErrMalformedDoctype
 	}
+
 	rawDoctype := raw[startIndex : startIndex+endIndex+1]
 
 	// 2) Tokenize between `<!DOCTYPE` and `>`
@@ -93,9 +94,9 @@ func GetHTMLVersion(input string) (*DoctypeNode, error) {
 	//
 	// Preserves the exact PUBLIC/SYSTEM identifier strings
 	var tokens []string
+
 	i := startIndex + len("<!DOCTYPE")
 	for i < startIndex+endIndex {
-
 		// Skip whitespace
 		for i < startIndex+endIndex && unicode.IsSpace(rune(raw[i])) {
 			i++
@@ -112,9 +113,11 @@ func GetHTMLVersion(input string) (*DoctypeNode, error) {
 			for j < startIndex+endIndex && raw[j] != '"' {
 				j++
 			}
+
 			if j >= startIndex+endIndex {
-				return nil, errors.New("unterminated quote in <!DOCTYPE>")
+				return nil, ErrUnterminatedQuote
 			}
+
 			tokens = append(tokens, raw[i+1:j])
 			i = j + 1
 		} else {
@@ -123,6 +126,7 @@ func GetHTMLVersion(input string) (*DoctypeNode, error) {
 			for j < startIndex+endIndex && !unicode.IsSpace(rune(raw[j])) {
 				j++
 			}
+
 			tokens = append(tokens, strings.ToUpper(raw[i:j]))
 			i = j
 		}
@@ -130,8 +134,9 @@ func GetHTMLVersion(input string) (*DoctypeNode, error) {
 
 	// tokens[0] is ALWAYS the root name, unless malformed: "html", "math", "svg"
 	if len(tokens) == 0 {
-		return nil, errors.New("DOCTYPE has no name token, document considered quirky")
+		return nil, ErrDoctypeNoNameToken
 	}
+
 	root := strings.ToLower(tokens[0])
 
 	// 3) Match based on tokens
@@ -148,10 +153,12 @@ func GetHTMLVersion(input string) (*DoctypeNode, error) {
 	if len(tokens) >= 4 && tokens[1] == "PUBLIC" {
 		pub := tokens[2]
 		sys := tokens[3]
+
 		name, known := KnownDOCTYPEs[pub]
 		if !known {
 			name = "Unknown PUBLIC+SYSTEM declaration"
 		}
+
 		return &DoctypeNode{
 			Name:             name,
 			DocumentTypeName: root,
@@ -164,10 +171,12 @@ func GetHTMLVersion(input string) (*DoctypeNode, error) {
 	// c) PUBLIC-only form: ["HTML", "PUBLIC", publicId]
 	if len(tokens) >= 3 && tokens[1] == "PUBLIC" {
 		pub := tokens[2]
+
 		name, known := KnownDOCTYPEs[pub]
 		if !known {
 			name = "Unknown PUBLIC-only declaration"
 		}
+
 		return &DoctypeNode{
 			Name:             name,
 			DocumentTypeName: root,
@@ -179,6 +188,7 @@ func GetHTMLVersion(input string) (*DoctypeNode, error) {
 	// d) SYSTEM-only form: ["HTML","SYSTEM", systemId]
 	if len(tokens) >= 3 && tokens[1] == "SYSTEM" {
 		sys := tokens[2]
+
 		return &DoctypeNode{
 			Name:             "Unknown SYSTEM-only declaration",
 			DocumentTypeName: root,
@@ -188,5 +198,5 @@ func GetHTMLVersion(input string) (*DoctypeNode, error) {
 	}
 
 	// 4) Bare <!DOCTYPE i_hate_standards> (quirky) or unrecognized
-	return nil, errors.New("unsupported or unrecognized DOCTYPE format, document considered quirky")
+	return nil, ErrUnrecognizedDoctype
 }

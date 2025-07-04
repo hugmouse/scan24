@@ -30,10 +30,12 @@ func TestGetHTMLVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.filename, func(t *testing.T) {
 			path := filepath.Join("testdata", "doctype", tt.filename)
+
 			file, err := os.Open(path)
 			if err != nil {
 				t.Fatalf("Failed to open file %s: %v", tt.filename, err)
 			}
+
 			defer file.Close()
 
 			bytes, err := io.ReadAll(file)
@@ -45,6 +47,7 @@ func TestGetHTMLVersion(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to parse %s: %v", tt.filename, err)
 			}
+
 			if actual.Name != tt.expected {
 				t.Errorf("GetHTMLVersion(%s) = %q; want %q", tt.filename, actual.Name, tt.expected)
 			}

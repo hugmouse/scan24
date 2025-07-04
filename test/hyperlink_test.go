@@ -9,6 +9,7 @@ func TestClassify(t *testing.T) {
 	type args struct {
 		href string
 	}
+
 	tests := []struct {
 		name string
 		args args

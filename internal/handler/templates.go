@@ -14,6 +14,7 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
+
 			return template.HTML(bb)
 		},
 		"includeJS": func(path string) template.JS {
@@ -21,6 +22,7 @@ func init() {
 			if err != nil {
 				panic(err)
 			}
+
 			return template.JS(bb)
 		},
 	}
