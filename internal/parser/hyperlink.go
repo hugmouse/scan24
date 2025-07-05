@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"time"
 )
 
 type HrefType string
@@ -70,11 +69,6 @@ type HyperLink struct {
 }
 
 var (
-	// DefaultHTTPClient is reused for all Analyze calls.
-	DefaultHTTPClient = &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
 	allowedSchemes = map[string]struct{}{
 		"http":  {},
 		"https": {},
@@ -88,7 +82,7 @@ var (
 // -1 for unsupported schemes,
 // 0 if any error occurred during fetching,
 // or the actual HTTP status code otherwise.
-func Analyze(rawHref string, baseURL *url.URL) HyperLink {
+func Analyze(rawHref string, baseURL *url.URL, httpClient *http.Client) HyperLink {
 	hrefType := Classify(rawHref)
 
 	// 1) parse & resolve
@@ -109,7 +103,7 @@ func Analyze(rawHref string, baseURL *url.URL) HyperLink {
 	}
 
 	// 3) and fetch it
-	status, fetchErr := fetchStatus(resolved.String())
+	status, fetchErr := fetchStatus(resolved.String(), httpClient)
 	if fetchErr != nil {
 		log.Printf("Analyze: failed fetching %q: %v", resolved.String(), fetchErr)
 
@@ -150,9 +144,9 @@ func resolveURL(rawHref string, baseURL *url.URL) (*url.URL, error) {
 
 // fetchStatus does HEAD first; if it returns 405 Method Not Allowed,
 // it retries with GET.
-func fetchStatus(url string) (int, error) {
+func fetchStatus(url string, httpClient *http.Client) (int, error) {
 	// HEAD
-	resp, err := DefaultHTTPClient.Head(url)
+	resp, err := httpClient.Head(url)
 	if err != nil {
 		return 0, fmt.Errorf("failed to HEAD the url '%s': %w", url, err)
 	}
@@ -160,7 +154,7 @@ func fetchStatus(url string) (int, error) {
 
 	if resp.StatusCode == http.StatusMethodNotAllowed {
 		// retry GET
-		resp2, err2 := DefaultHTTPClient.Get(url)
+		resp2, err2 := httpClient.Get(url)
 		if err2 != nil {
 			return 0, fmt.Errorf("failed to GET the url '%s': %w", url, err)
 		}

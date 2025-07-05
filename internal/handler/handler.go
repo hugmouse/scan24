@@ -51,7 +51,11 @@ var (
 	globalLock   = sync.Mutex{}
 )
 
-func IndexHandler(w http.ResponseWriter, r *http.Request) {
+type Handler struct {
+	Client *http.Client
+}
+
+func (h *Handler) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 
@@ -65,7 +69,7 @@ func IndexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func ResultHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ResultHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		respondWithError(w, http.StatusMethodNotAllowed, tmplResult, "Method not allowed. Use GET.")
 
@@ -106,7 +110,7 @@ func ResultHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		respondWithError(w, http.StatusMethodNotAllowed, tmplResult, "Method not allowed. Use GET.")
 
@@ -144,7 +148,7 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := http.Get(targetURL)
+	resp, err := h.Client.Get(targetURL)
 	if err != nil {
 		respondWithError(w, http.StatusBadGateway, tmplResult, fmt.Sprintf("Failed to fetch URL: %v", err))
 
@@ -184,7 +188,7 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Start job, return status
-	go doJob(doc, bodyBytes, baseURL, targetURL)
+	go h.doJob(doc, bodyBytes, baseURL, targetURL)
 
 	globalLock.Lock()
 
@@ -207,7 +211,7 @@ func AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.URL, targetURL string) {
+func (h *Handler) doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.URL, targetURL string) {
 	htmlVersion, err := parser.GetHTMLVersion(string(bodyBytes))
 	if err != nil {
 		log.Printf("Could not determine HTML version: %v", err)
@@ -259,7 +263,7 @@ func doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.URL, targetURL 
 
 			defer wg.Done()
 
-			link := parser.Analyze(attr, baseURL)
+			link := parser.Analyze(attr, baseURL, h.Client)
 
 			switch link.HrefType {
 			case "external":
@@ -325,7 +329,7 @@ func doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.URL, targetURL 
 	globalLock.Unlock()
 }
 
-func JobStatus(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) JobStatus(w http.ResponseWriter, r *http.Request) {
 	targetURL := r.URL.Query().Get("url")
 	if targetURL == "" {
 		respondWithError(w, http.StatusBadRequest, tmplResult, "URL parameter is missing.")
