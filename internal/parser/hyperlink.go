@@ -145,7 +145,7 @@ func resolveURL(rawHref string, baseURL *url.URL) (*url.URL, error) {
 // fetchStatus does HEAD first; if it returns 405 Method Not Allowed,
 // it retries with GET.
 func fetchStatus(url string, httpClient *http.Client) (int, error) {
-	req, err := http.NewRequest("HEAD", url, nil)
+	req, err := http.NewRequest(http.MethodHead, url, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -160,10 +160,11 @@ func fetchStatus(url string, httpClient *http.Client) (int, error) {
 
 	// retry with GET instead
 	if resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusBadRequest {
-		req, err = http.NewRequest("GET", url, nil)
+		req, err = http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
 			return 0, err
 		}
+
 		resp2, err2 := httpClient.Do(req)
 		if err2 != nil {
 			return 0, fmt.Errorf("failed to GET the url '%s': %w", url, err)

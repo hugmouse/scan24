@@ -22,6 +22,7 @@ type config struct {
 	MaxIdleConns                int    `env:"MAX_IDLE_CONNS"                  envDefault:"100"`
 	IdleConnTimeout             int    `env:"IDLE_CONN_TIMEOUT"               envDefault:"90"`
 	MaxRedirects                int    `env:"MAX_REDIRECTS"                   envDefault:"3"`
+	RateLimit                   int    `env:"RATE_LIMIT"                      envDefault:"2"`
 }
 
 func main() {
@@ -57,7 +58,8 @@ func main() {
 	}
 
 	h := &handler.Handler{
-		Client: client,
+		Client:    client,
+		RateLimit: cfg.RateLimit,
 	}
 
 	mux := http.NewServeMux()

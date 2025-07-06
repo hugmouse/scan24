@@ -52,7 +52,8 @@ var (
 )
 
 type Handler struct {
-	Client *http.Client
+	Client    *http.Client
+	RateLimit int
 }
 
 func (h *Handler) IndexHandler(w http.ResponseWriter, r *http.Request) {
@@ -243,7 +244,7 @@ func (h *Handler) doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.UR
 		linkMu sync.Mutex
 	)
 	// TODO: replace local ticker with global/some other mechanism of rate-limiting
-	var rate = time.Tick(time.Second / time.Duration(1))
+	var rate = time.Tick(time.Second / time.Duration(h.RateLimit))
 
 	// Essentially just run a goroutine for every <a> with a valid href value
 	//
@@ -260,6 +261,7 @@ func (h *Handler) doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.UR
 
 		go func(attr string) {
 			<-rate
+			log.Printf("[%s] Checking out: %s", baseURL, attr)
 
 			defer wg.Done()
 
