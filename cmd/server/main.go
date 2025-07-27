@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"github.com/caarlos0/env/v11"
 	"github.com/hugmouse/scan24/internal/handler"
+	"github.com/hugmouse/scan24/internal/job"
+	"github.com/hugmouse/scan24/internal/workerPool"
 	"github.com/hugmouse/scan24/static"
 	"log"
 	"net"
@@ -23,6 +26,8 @@ type config struct {
 	IdleConnTimeout             int    `env:"IDLE_CONN_TIMEOUT"               envDefault:"90"`
 	MaxRedirects                int    `env:"MAX_REDIRECTS"                   envDefault:"3"`
 	RateLimit                   int    `env:"RATE_LIMIT"                      envDefault:"2"`
+	WorkerPool                  int    `env:"WORKER_POOL" envDefault:"5"`
+	QueueCapacity               int    `env:"QUEUE_CAPACITY" envDefault:"100"`
 }
 
 func main() {
@@ -30,6 +35,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	wp := workerPool.NewWorkerPool(cfg.WorkerPool, cfg.QueueCapacity)
+	wp.StartWorkers()
 
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
@@ -58,15 +66,36 @@ func main() {
 	}
 
 	h := &handler.Handler{
-		Client:    client,
-		RateLimit: cfg.RateLimit,
+		Client:     client,
+		RateLimit:  cfg.RateLimit,
+		WorkerPool: wp,
+		JobResults: make(map[string]job.Result),
 	}
+
+	go func() {
+		for result := range wp.Results() {
+			if result.Error != nil {
+				fmt.Printf("Job %s (%s) by Worker %d FAILED: %v (Result Data: %v)\n",
+					result.JobID, result.JobType, result.WorkerID, result.Error, result.Data)
+			} else {
+				fmt.Printf("Job %s (%s) by Worker %d COMPLETED: %v\n",
+					result.JobID, result.JobType, result.WorkerID, result.Data)
+			}
+			h.JobResults[result.JobID] = result
+		}
+	}()
+
+	go func() {
+		for {
+			time.Sleep(time.Duration(1 * time.Second))
+			total, budy, free := wp.GetStatus()
+			log.Printf("[worker stats] Total %d, busy %d, free %d", total, budy, free)
+		}
+	}()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.IndexHandler)
 	mux.HandleFunc("/analyze", h.AnalyzeHandler)
-	mux.HandleFunc("/result", h.ResultHandler)
-	mux.HandleFunc("/status", h.JobStatus)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(static.FS))))
 
 	log.Printf("Starting server on %s", cfg.HTTPServe)

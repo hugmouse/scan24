@@ -1,19 +1,16 @@
 package handler
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
+	"github.com/hugmouse/scan24/internal/job"
+	"github.com/hugmouse/scan24/internal/job/fetchAndParseJob"
 	"github.com/hugmouse/scan24/internal/parser"
-	"golang.org/x/net/html/charset"
+	"github.com/hugmouse/scan24/internal/workerPool"
 	"html/template"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type LinkCounters struct {
@@ -52,8 +49,10 @@ var (
 )
 
 type Handler struct {
-	Client    *http.Client
-	RateLimit int
+	Client     *http.Client
+	RateLimit  int
+	WorkerPool *workerPool.WorkerPool
+	JobResults map[string]job.Result
 }
 
 func (h *Handler) IndexHandler(w http.ResponseWriter, r *http.Request) {
@@ -67,47 +66,6 @@ func (h *Handler) IndexHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error executing template: %v", err), http.StatusInternalServerError)
 		log.Printf("Error executing index template: %v", err)
-	}
-}
-
-func (h *Handler) ResultHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		respondWithError(w, http.StatusMethodNotAllowed, tmplResult, "Method not allowed. Use GET.")
-
-		return
-	}
-
-	targetURL := r.URL.Query().Get("url")
-	if targetURL == "" {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "URL parameter is missing.")
-
-		return
-	}
-
-	baseURL, err := url.ParseRequestURI(targetURL)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, tmplResult, fmt.Sprintf("Invalid URL provided: %v", err))
-
-		return
-	}
-
-	if baseURL.Scheme != "http" && baseURL.Scheme != "https" {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "Only HTTP/HTTPS links are allowed. For example: https://mysh.dev")
-
-		return
-	}
-
-	val, ok := globalMap[targetURL]
-	if !ok {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "We don't have scan results for the following URL: "+baseURL.String())
-
-		return
-	}
-
-	err = tmplResult.Execute(w, val)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error executing result template: %v", err), http.StatusInternalServerError)
-		log.Printf("Error executing result template: %v", err)
 	}
 }
 
@@ -138,217 +96,17 @@ func (h *Handler) AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	val, ok := globalMap[targetURL]
-	if ok {
-		err := tmplProgress.Execute(w, val)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Error executing result template: %v", err), http.StatusInternalServerError)
-			log.Printf("Error executing result template: %v", err)
-		}
+	// Do the job, return 202
 
-		return
-	}
-
-	resp, err := h.Client.Get(targetURL)
-	if err != nil {
-		respondWithError(w, http.StatusBadGateway, tmplResult, fmt.Sprintf("Failed to fetch URL: %v", err))
-
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respondWithError(w, http.StatusBadGateway, tmplResult, fmt.Sprintf("URL that you provided failed to load, code: %d", resp.StatusCode))
-
-		return
-	}
-
-	ct := resp.Header.Get("Content-Type")
-
-	reader, err := charset.NewReader(resp.Body, ct)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, tmplResult, fmt.Sprintf("Failed to create charset reader: %v", err))
-
-		return
-	}
-
-	bodyBytes, err := io.ReadAll(reader)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, tmplResult, fmt.Sprintf("Failed to read response body: %v", err))
-
-		return
-	}
-
-	goqueryReader := bytes.NewReader(bodyBytes)
-
-	doc, err := goquery.NewDocumentFromReader(goqueryReader)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, tmplResult, fmt.Sprintf("Failed to parse HTML: %v", err))
-
-		return
-	}
-
-	// Start job, return status
-	go h.doJob(doc, bodyBytes, baseURL, targetURL)
-
-	globalLock.Lock()
-
-	globalMap[targetURL] = globalMapData{
-		Page:     PageData{},
-		URL:      targetURL,
-		Progress: 0.0,
-	}
-
-	globalLock.Unlock()
-
-	err = tmplProgress.Execute(w, globalMapData{
-		Page:     PageData{},
-		URL:      targetURL,
-		Progress: 0.0,
-	})
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error executing result template: %v", err), http.StatusInternalServerError)
-		log.Printf("Error executing result template: %v", err)
-	}
-}
-
-func (h *Handler) doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.URL, targetURL string) {
-	htmlVersion, err := parser.GetHTMLVersion(string(bodyBytes))
-	if err != nil {
-		log.Printf("Could not determine HTML version: %v", err)
-
-		htmlVersion = &parser.DoctypeNode{Name: "Unknown"}
-	}
-
-	title := getTitle(doc)
-
-	headings := make(map[string]int, 6)
-	for _, tag := range []string{"h1", "h2", "h3", "h4", "h5", "h6"} {
-		headings[tag] = doc.Find(tag).Length()
-	}
-
-	links := make([]parser.HyperLink, 0)
-
-	var (
-		jobCounter      int64
-		jobDone         int64
-		externalCounter int64
-		externalAlive   int64
-		internalCounter int64
-		internalAlive   int64
-		protocolCounter int64
-	)
-
-	var (
-		wg     sync.WaitGroup
-		linkMu sync.Mutex
-	)
-	// TODO: replace local ticker with global/some other mechanism of rate-limiting
-	var rate = time.Tick(time.Second / time.Duration(h.RateLimit))
-
-	// Essentially just run a goroutine for every <a> with a valid href value
-	//
-	// This also runs for href that = "#!" or "./" and etc since there might
-	// be a custom HTTP server that renders something different on those URLs
-	doc.Find("a").Each(func(_ int, s *goquery.Selection) {
-		attr, exists := s.Attr("href")
-		if !exists {
-			return
-		}
-
-		wg.Add(1)
-		atomic.AddInt64(&jobCounter, 1)
-
-		go func(attr string) {
-			<-rate
-			log.Printf("[%s] Checking out: %s", baseURL, attr)
-
-			defer wg.Done()
-
-			link := parser.Analyze(attr, baseURL, h.Client)
-
-			switch link.HrefType {
-			case "external":
-				atomic.AddInt64(&externalCounter, 1)
-
-				if link.StatusCode == http.StatusOK {
-					atomic.AddInt64(&externalAlive, 1)
-				}
-			case "internal":
-				atomic.AddInt64(&internalCounter, 1)
-
-				if link.StatusCode == http.StatusOK {
-					atomic.AddInt64(&internalAlive, 1)
-				}
-			case "protocol":
-				atomic.AddInt64(&protocolCounter, 1)
-			}
-
-			linkMu.Lock()
-
-			links = append(links, link)
-
-			linkMu.Unlock()
-			atomic.AddInt64(&jobDone, 1)
-			globalLock.Lock()
-
-			globalMap[targetURL] = globalMapData{
-				Page:     PageData{},
-				URL:      targetURL,
-				Progress: float64(jobDone) / float64(jobCounter) * 100,
-			}
-
-			globalLock.Unlock()
-		}(attr)
+	h.WorkerPool.SubmitJob(&fetchAndParseJob.FetchJob{
+		ID:        baseURL.String(),
+		URL:       baseURL.String(),
+		Client:    h.Client,
+		RateLimit: h.RateLimit,
 	})
 
-	wg.Wait()
-
-	haveLoginForm := parser.HasLoginForm(doc)
-
-	globalLock.Lock()
-
-	globalMap[targetURL] = globalMapData{
-		Page: PageData{
-			URL:          targetURL,
-			Title:        title,
-			HTMLVersion:  htmlVersion.Name,
-			Headings:     headings,
-			HyperLinks:   links,
-			HasLoginForm: haveLoginForm,
-			LinkCounters: LinkCounters{
-				Internal:      internalCounter,
-				InternalAlive: internalAlive,
-				External:      externalCounter,
-				ExternalAlive: externalAlive,
-				Protocol:      protocolCounter,
-			},
-		},
-		URL:      targetURL,
-		Progress: 100.0,
-	}
-
-	globalLock.Unlock()
-}
-
-func (h *Handler) JobStatus(w http.ResponseWriter, r *http.Request) {
-	targetURL := r.URL.Query().Get("url")
-	if targetURL == "" {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "URL parameter is missing.")
-
-		return
-	}
-
-	val, ok := globalMap[targetURL]
-	if !ok {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "Job does not exist")
-	}
-
-	err := tmplProgress.Execute(w, val)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error executing result template: %v", err), http.StatusInternalServerError)
-		log.Printf("Error executing result template: %v", err)
-	}
+	w.WriteHeader(http.StatusAccepted)
+	return
 }
 
 // respondWithError is a helper function to streamline error handling.
@@ -357,26 +115,4 @@ func respondWithError(w http.ResponseWriter, statusCode int, tmpl *template.Temp
 
 	data := PageData{Error: errMsg}
 	_ = tmpl.Execute(w, data)
-}
-
-// getTitle attempts to get title from passed *goquery.Document
-//
-// Based on webkit source code HTML can contain multiple <title> tags,
-// but we only care about the first one that we encounter
-//
-// Example:
-//
-// void Document::setTitleElement(const StringWithDirection& title, Element* titleElement)
-//
-//	{
-//	    if (titleElement != m_titleElement) {
-//	        if (m_titleElement || m_titleSetExplicitly)
-//	            // Only allow the first title element to change the title -- others have no effect.
-//	            return;
-//	        m_titleElement = titleElement;
-//	    }
-//	    updateTitle(title);
-//	}
-func getTitle(doc *goquery.Document) (title string) {
-	return doc.Find("title").First().Text()
 }
