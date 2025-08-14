@@ -2,9 +2,12 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/hugmouse/scan24/internal/cache"
 	"github.com/hugmouse/scan24/internal/parser"
+	"github.com/hugmouse/scan24/internal/ratelimiter"
 	"golang.org/x/net/html/charset"
 	"html/template"
 	"io"
@@ -13,7 +16,6 @@ import (
 	"net/url"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 type LinkCounters struct {
@@ -36,7 +38,7 @@ type PageData struct {
 	Error           string
 }
 
-type globalMapData struct {
+type GlobalMapData struct {
 	Page     PageData
 	URL      string
 	Progress float64
@@ -47,13 +49,14 @@ var (
 	tmplIndex    *template.Template
 	tmplResult   *template.Template
 	tmplProgress *template.Template
-	globalMap    = make(map[string]globalMapData)
-	globalLock   = sync.Mutex{}
+	tmplError    *template.Template
 )
 
 type Handler struct {
-	Client    *http.Client
-	RateLimit int
+	Client      *http.Client
+	RateLimit   int
+	Cache       *cache.Cache[string, GlobalMapData]
+	RateLimiter *ratelimiter.DomainRateLimiter
 }
 
 func (h *Handler) IndexHandler(w http.ResponseWriter, r *http.Request) {
@@ -72,34 +75,34 @@ func (h *Handler) IndexHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ResultHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		respondWithError(w, http.StatusMethodNotAllowed, tmplResult, "Method not allowed. Use GET.")
+		respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed. Use GET.")
 
 		return
 	}
 
 	targetURL := r.URL.Query().Get("url")
 	if targetURL == "" {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "URL parameter is missing.")
+		respondWithError(w, http.StatusBadRequest, "URL parameter is missing.")
 
 		return
 	}
 
 	baseURL, err := url.ParseRequestURI(targetURL)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, tmplResult, fmt.Sprintf("Invalid URL provided: %v", err))
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Invalid URL provided: %v", err))
 
 		return
 	}
 
 	if baseURL.Scheme != "http" && baseURL.Scheme != "https" {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "Only HTTP/HTTPS links are allowed. For example: https://mysh.dev")
+		respondWithError(w, http.StatusBadRequest, "Only HTTP/HTTPS links are allowed. For example: https://mysh.dev")
 
 		return
 	}
 
-	val, ok := globalMap[targetURL]
+	val, ok := h.Cache.Get(targetURL)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "We don't have scan results for the following URL: "+baseURL.String())
+		respondWithError(w, http.StatusBadRequest, "We don't have scan results for the following URL: "+baseURL.String())
 
 		return
 	}
@@ -113,52 +116,57 @@ func (h *Handler) ResultHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		respondWithError(w, http.StatusMethodNotAllowed, tmplResult, "Method not allowed. Use GET.")
+		respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed. Use GET.")
 
 		return
 	}
 
 	targetURL := r.URL.Query().Get("url")
 	if targetURL == "" {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "URL parameter is missing.")
+		respondWithError(w, http.StatusBadRequest, "URL parameter is missing.")
 
 		return
 	}
 
 	baseURL, err := url.ParseRequestURI(targetURL)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, tmplResult, fmt.Sprintf("Invalid URL provided: %v", err))
+		respondWithError(w, http.StatusBadRequest, fmt.Sprintf("Invalid URL provided: %v", err))
 
 		return
 	}
 
 	if baseURL.Scheme != "http" && baseURL.Scheme != "https" {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "Only HTTP/HTTPS links are allowed. For example: https://mysh.dev")
+		respondWithError(w, http.StatusBadRequest, "Only HTTP/HTTPS links are allowed. For example: https://mysh.dev")
 
 		return
 	}
 
-	val, ok := globalMap[targetURL]
+	val, ok := h.Cache.Get(targetURL)
 	if ok {
-		err := tmplProgress.Execute(w, val)
+		var err error
+		if val.Progress == 100 {
+			err = tmplResult.Execute(w, val)
+		} else {
+			err = tmplProgress.Execute(w, val)
+		}
+
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Error executing result template: %v", err), http.StatusInternalServerError)
 			log.Printf("Error executing result template: %v", err)
 		}
-
 		return
 	}
 
 	resp, err := h.Client.Get(targetURL)
 	if err != nil {
-		respondWithError(w, http.StatusBadGateway, tmplResult, fmt.Sprintf("Failed to fetch URL: %v", err))
+		respondWithError(w, http.StatusBadGateway, fmt.Sprintf("Failed to fetch URL: %v", err))
 
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respondWithError(w, http.StatusBadGateway, tmplResult, fmt.Sprintf("URL that you provided failed to load, code: %d", resp.StatusCode))
+		respondWithError(w, http.StatusBadGateway, fmt.Sprintf("URL that you provided failed to load, code: %d", resp.StatusCode))
 
 		return
 	}
@@ -167,14 +175,14 @@ func (h *Handler) AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 
 	reader, err := charset.NewReader(resp.Body, ct)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, tmplResult, fmt.Sprintf("Failed to create charset reader: %v", err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create charset reader: %v", err))
 
 		return
 	}
 
 	bodyBytes, err := io.ReadAll(reader)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, tmplResult, fmt.Sprintf("Failed to read response body: %v", err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to read response body: %v", err))
 
 		return
 	}
@@ -183,7 +191,7 @@ func (h *Handler) AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 
 	doc, err := goquery.NewDocumentFromReader(goqueryReader)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, tmplResult, fmt.Sprintf("Failed to parse HTML: %v", err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to parse HTML: %v", err))
 
 		return
 	}
@@ -191,17 +199,13 @@ func (h *Handler) AnalyzeHandler(w http.ResponseWriter, r *http.Request) {
 	// Start job, return status
 	go h.doJob(doc, bodyBytes, baseURL, targetURL)
 
-	globalLock.Lock()
-
-	globalMap[targetURL] = globalMapData{
+	h.Cache.Set(targetURL, GlobalMapData{
 		Page:     PageData{},
 		URL:      targetURL,
 		Progress: 0.0,
-	}
+	})
 
-	globalLock.Unlock()
-
-	err = tmplProgress.Execute(w, globalMapData{
+	err = tmplProgress.Execute(w, GlobalMapData{
 		Page:     PageData{},
 		URL:      targetURL,
 		Progress: 0.0,
@@ -243,8 +247,6 @@ func (h *Handler) doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.UR
 		wg     sync.WaitGroup
 		linkMu sync.Mutex
 	)
-	// TODO: replace local ticker with global/some other mechanism of rate-limiting
-	var rate = time.Tick(time.Second / time.Duration(h.RateLimit))
 
 	// Essentially just run a goroutine for every <a> with a valid href value
 	//
@@ -260,10 +262,23 @@ func (h *Handler) doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.UR
 		atomic.AddInt64(&jobCounter, 1)
 
 		go func(attr string) {
-			<-rate
-			log.Printf("[%s] Checking out: %s", baseURL, attr)
-
 			defer wg.Done()
+
+			u, err := url.Parse(attr)
+			if err != nil {
+				log.Printf("could not parse url %s: %v", attr, err)
+				return
+			}
+
+			// Use the domain of the link to get a rate limiter
+			limiter := h.RateLimiter.GetLimiter(u.Hostname())
+			err = limiter.Wait(context.Background())
+			if err != nil {
+				log.Printf("rate limiter wait error: %v", err)
+				return
+			}
+
+			log.Printf("[%s] Checking out: %s", baseURL, attr)
 
 			link := parser.Analyze(attr, baseURL, h.Client)
 
@@ -290,15 +305,12 @@ func (h *Handler) doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.UR
 
 			linkMu.Unlock()
 			atomic.AddInt64(&jobDone, 1)
-			globalLock.Lock()
 
-			globalMap[targetURL] = globalMapData{
+			h.Cache.Set(targetURL, GlobalMapData{
 				Page:     PageData{},
 				URL:      targetURL,
 				Progress: float64(jobDone) / float64(jobCounter) * 100,
-			}
-
-			globalLock.Unlock()
+			})
 		}(attr)
 	})
 
@@ -306,9 +318,7 @@ func (h *Handler) doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.UR
 
 	haveLoginForm := parser.HasLoginForm(doc)
 
-	globalLock.Lock()
-
-	globalMap[targetURL] = globalMapData{
+	h.Cache.Set(targetURL, GlobalMapData{
 		Page: PageData{
 			URL:          targetURL,
 			Title:        title,
@@ -326,22 +336,22 @@ func (h *Handler) doJob(doc *goquery.Document, bodyBytes []byte, baseURL *url.UR
 		},
 		URL:      targetURL,
 		Progress: 100.0,
-	}
-
-	globalLock.Unlock()
+	})
 }
 
 func (h *Handler) JobStatus(w http.ResponseWriter, r *http.Request) {
 	targetURL := r.URL.Query().Get("url")
 	if targetURL == "" {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "URL parameter is missing.")
+		respondWithError(w, http.StatusBadRequest, "URL parameter is missing.")
 
 		return
 	}
 
-	val, ok := globalMap[targetURL]
+	val, ok := h.Cache.Get(targetURL)
 	if !ok {
-		respondWithError(w, http.StatusBadRequest, tmplResult, "Job does not exist")
+		respondWithError(w, http.StatusBadRequest, "Job does not exist")
+
+		return
 	}
 
 	err := tmplProgress.Execute(w, val)
@@ -352,11 +362,11 @@ func (h *Handler) JobStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // respondWithError is a helper function to streamline error handling.
-func respondWithError(w http.ResponseWriter, statusCode int, tmpl *template.Template, errMsg string) {
+func respondWithError(w http.ResponseWriter, statusCode int, errMsg string) {
 	w.WriteHeader(statusCode)
 
-	data := PageData{Error: errMsg}
-	_ = tmpl.Execute(w, data)
+	data := GlobalMapData{Error: errMsg}
+	_ = tmplError.Execute(w, data)
 }
 
 // getTitle attempts to get title from passed *goquery.Document

@@ -2,8 +2,11 @@ package main
 
 import (
 	"github.com/caarlos0/env/v11"
+	"github.com/hugmouse/scan24/internal/cache"
 	"github.com/hugmouse/scan24/internal/handler"
+	"github.com/hugmouse/scan24/internal/ratelimiter"
 	"github.com/hugmouse/scan24/static"
+	"golang.org/x/time/rate"
 	"log"
 	"net"
 	"net/http"
@@ -23,6 +26,7 @@ type config struct {
 	IdleConnTimeout             int    `env:"IDLE_CONN_TIMEOUT"               envDefault:"90"`
 	MaxRedirects                int    `env:"MAX_REDIRECTS"                   envDefault:"3"`
 	RateLimit                   int    `env:"RATE_LIMIT"                      envDefault:"2"`
+	CacheTTL                    int    `env:"CACHE_TTL"                       envDefault:"60"`
 }
 
 func main() {
@@ -57,9 +61,14 @@ func main() {
 		Jar: nil,
 	}
 
+	jobCache := cache.New[string, handler.GlobalMapData](time.Duration(cfg.CacheTTL) * time.Second)
+	limiter := ratelimiter.NewDomainRateLimiter(rate.Limit(cfg.RateLimit), 1)
+
 	h := &handler.Handler{
-		Client:    client,
-		RateLimit: cfg.RateLimit,
+		Client:      client,
+		RateLimit:   cfg.RateLimit,
+		Cache:       jobCache,
+		RateLimiter: limiter,
 	}
 
 	mux := http.NewServeMux()
