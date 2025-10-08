@@ -77,13 +77,3 @@ Wikipedia articles:
 1Password articles:
 
 - https://developer.1password.com/docs/web/compatible-website-design/
-
-## TODO
-
-- Support for `.env` to make it a little bit more friendly
-- Come up with a user-agent and respect robots.txt if possible
-- Queue system: If multiple users request the same page concurrently, we should ignore duplicate requests and return the status of the currently running job
-- Better error handling for non-standard HTTP statuses, redirect loops, broken streams etc.
-- Modularization: Separate the DOCTYPE and Href parsers into packages and refactor them to be more generic
-- Custom HTTP client support: Add the ability to inject custom `http.Client` instances into the parsers
-- Tests for login form parser, more tests for href and DOCTYPE parsers
